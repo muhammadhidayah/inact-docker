@@ -1,0 +1,142 @@
+#!/bin/bash
+
+# Created By: Muhammad Hidayah
+# Date: March 2 2019
+# E-mail: hidayah@inarts.co.id
+# Company: Inti Artistika Solusitama
+
+createDockerCompose() {
+/bin/cat  <<EOM >"docker-compose.yml"
+version: '3'
+services: 
+  web: 
+    image: inact_webserver
+    build: .
+    restart: always
+    volumes: 
+      - ./code:/var/www/html
+    ports:
+      - "8080:80"
+    networks:
+      inact_network:
+        ipv4_address: 172.16.98.10
+  
+  db:
+    image: mysql:5.6
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: $passwd
+    volumes:
+      - ./mysqldata:/var/lib/mysql
+    ports:
+      - "9306:3306"
+    networks:
+      inact_network:
+        ipv4_address: 172.16.98.11
+
+networks:
+  inact_network:
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.16.98.0/24
+EOM
+}
+
+updockercompose() {
+    {
+        createDockerCompose "$passwd" &&
+        echo "Success Create Docker Compose"
+    } || {
+        echo "Failed to Create Docker Compose"
+
+        exit;
+    }
+
+    echo "$(sudo docker-compose up -d)"
+
+    echo "Your IP Container Web Server: 172.16.98.10:8080"
+    echo "Your IP Container Database Server: 172.16.98.11:9306"
+    echo "Please put your code in Folder code"
+}
+
+if [ "$EUID" -ne 0 ]
+    then echo "Please run as root"
+    exit
+fi
+
+checkPasswd="true"
+
+dir=`(pwd)`
+
+images=$(sudo docker images inact_server)
+
+if [[ ! "$images" =~ "inact_server" ]]; then
+
+    if [[ ! -e "Dockerfile" ]]; then
+        echo "Dockerfile is missing"
+        exit
+    fi
+
+    {
+        echo "$(sudo docker build -t inact_server .)" &&
+        echo "Success Create Images"
+    } || {
+        exit
+    }
+
+    for i in {1..3}
+        do
+            echo -n "Type Password MYSQL: "
+            read -s passwd
+            printf '\n'
+            echo -n "Re-type Password MYSQL: "
+            read -s repasswd
+            printf '\n'
+
+            if [[ "$passwd" != "$repasswd" ]]; then
+                echo "Sorry, Your password not same. Try Again"
+                checkPasswd="false"
+            elif [[ "$passwd" == "$repasswd" ]]; then
+                checkPasswd="true"
+                break
+            fi
+    done
+
+    if [[ "$checkPasswd" == "false" ]]; then
+        exit
+    fi
+
+    updockercompose
+
+    exit
+elif [[ "$images" =~ "inact_server" ]]; then
+    for i in {1..3}
+        do
+            echo -n "Type Password MYSQL: "
+            read -s passwd
+            printf '\n'
+            echo -n "Re-type Password MYSQL: "
+            read -s repasswd
+            printf '\n'
+
+            if [[ "$passwd" != "$repasswd" ]]; then
+                echo "Sorry, Your password not same. Try Again"
+                checkPasswd="false"
+            elif [[ "$passwd" == "$repasswd" ]]; then
+                checkPasswd="true"
+                break
+            fi
+    done
+    
+    if [[ "$checkPasswd" == "false" ]]; then
+        exit
+    fi
+
+    updockercompose
+fi
+
+
+
+
